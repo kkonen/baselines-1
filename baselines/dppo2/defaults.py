@@ -45,7 +45,6 @@ def mara_mlp():
         total_timesteps = 1e8,
         save_interval = 10,
         env_name = 'MARA-v0',
-        nenv = 5,
         #env_name = 'MARAReal-v0',
         #env_name = 'MARAOrient-v0',
         # env_name = 'MARACollision-v0',
