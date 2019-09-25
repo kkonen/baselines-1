@@ -111,9 +111,9 @@ def mara_lstm():
         network = 'lstm',
         total_timesteps = 1e8,
         save_interval = 10,
-        env_name = 'MARA-v0',
-        num_envs = 4,
+        env_name = 'MARARandomTarget-v0',
+        num_envs = 8,
         transfer_path = None,
         # transfer_path = '/tmp/ros2learn/MARACollisionOrientRandomTarget-v0/ppo2_lstm/checkpoints/00090',
-        trained_path = '/tmp/ros2learn/MARACollisionOrientRandomTarget-v0/ppo2_lstm/checkpoints/00090'
+        trained_path = '/home/rkojcev/MARA_NN/lstm_server/best'
     )
