@@ -2,26 +2,22 @@ import os
 import time
 import numpy as np
 import os.path as osp
-from threading import Lock
 from baselines import logger
 from collections import deque
 from baselines.common import explained_variance, set_global_seeds
 from baselines.common.policies import build_policy
+
 try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
-from baselines.ppo2.runner import Runner
+from baselines.dppo2.runner import Runner
 
 
 def constfn(val):
     def f(_):
         return val
     return f
-
-
-mutex = Lock()
-
 
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
@@ -98,6 +94,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     # Get state_space and action_space
     ob_space = env.observation_space
     ac_space = env.action_space
+
     # Calculate the batch_size
     nbatch = nenvs * nsteps
     nbatch_train = nbatch // nminibatches
@@ -105,7 +102,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
     # Instantiate the model object (that creates act_model and train_model)
     if model_fn is None:
-        from baselines.ppo2.model import Model
+        from baselines.dppo2.model import Model
         model_fn = Model
 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
@@ -144,7 +141,6 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
         # Get minibatch
         obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
-
         if eval_env is not None:
             eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
 
@@ -156,7 +152,6 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
         # Here what we're going to do is for each minibatch calculate the loss and append it.
         mblossvals = []
-
         if states is None: # nonrecurrent version
             # Index of each element of batch_size
             # Create the indices array
@@ -198,26 +193,24 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if update % log_interval == 0 or update == 1:
             # Calculates if value function is a good predicator of the returns (ev > 1)
             # or if it's just worse than predicting nothing (ev =< 0)
-            mutex.acquire()
             ev = explained_variance(values, returns)
-            logger.logkv(env.envs[0].leg_name + "/misc/serial_timesteps", update*nsteps)
-            logger.logkv(env.envs[0].leg_name + "/misc/nupdates", update)
-            logger.logkv(env.envs[0].leg_name + "/misc/total_timesteps", update*nbatch)
-            logger.logkv(env.envs[0].leg_name + "/fps", fps)
-            logger.logkv(env.envs[0].leg_name + "/misc/explained_variance", float(ev))
-            logger.logkv(env.envs[0].leg_name + '/eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
-            logger.logkv(env.envs[0].leg_name + '/eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
+            logger.logkv("misc/serial_timesteps", update*nsteps)
+            logger.logkv("misc/nupdates", update)
+            logger.logkv("misc/total_timesteps", update*nbatch)
+            logger.logkv("fps", fps)
+            logger.logkv("misc/explained_variance", float(ev))
+            logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
+            logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
             if eval_env is not None:
-                logger.logkv(env.envs[0].leg_name + '/eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
-                logger.logkv(env.envs[0].leg_name + '/eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
-            logger.logkv(env.envs[0].leg_name + '/misc/time_elapsed', tnow - tfirststart)
+                logger.logkv('eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
+                logger.logkv('eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
+            logger.logkv('misc/time_elapsed', tnow - tfirststart)
             for (lossval, lossname) in zip(lossvals, model.loss_names):
-                logger.logkv(env.envs[0].leg_name + '/loss/' + lossname, lossval)
+                logger.logkv('loss/' + lossname, lossval)
 
             logger.dumpkvs()
-            mutex.release()
         if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir() and is_mpi_root:
-            checkdir = osp.join(logger.get_dir(), env.envs[0].leg_name + '/checkpoints', )
+            checkdir = osp.join(logger.get_dir(), 'checkpoints')
             os.makedirs(checkdir, exist_ok=True)
             savepath = osp.join(checkdir, '%.5i'%update)
             print('Saving to', savepath)
@@ -228,6 +221,5 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 def safemean(xs):
     return np.nan if len(xs) == 0 else np.mean(xs)
 
-def safesum(xs):
-    return np.nan if len(xs) == 0 else np.sum(xs)
+
 
