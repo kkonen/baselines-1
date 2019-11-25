@@ -6,6 +6,7 @@ from threading import Lock
 from baselines import logger
 from collections import deque
 from baselines.common import explained_variance, set_global_seeds
+import baselines.common.tf_util as U
 from baselines.common.policies import build_policy
 try:
     from mpi4py import MPI
@@ -13,6 +14,7 @@ except ImportError:
     MPI = None
 from baselines.ppo2.runner import Runner
 
+import tensorflow as tf
 
 def constfn(val):
     def f(_):
@@ -24,9 +26,9 @@ mutex = Lock()
 
 
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
-            vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
-            log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
+          target_kl=0.01, vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
+          log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
+          save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
     '''
     Learn policy using PPO algorithm (https://arxiv.org/abs/1707.06347)
 
@@ -129,6 +131,11 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     # Start total timer
     tfirststart = time.perf_counter()
 
+    var_list = tf.trainable_variables()
+
+    get_flat = U.GetFlat(var_list)
+    set_from_flat = U.SetFromFlat(var_list)
+
     nupdates = total_timesteps//nbatch
     for update in range(1, nupdates+1):
         assert nbatch % nminibatches == 0
@@ -156,6 +163,8 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
         # Here what we're going to do is for each minibatch calculate the loss and append it.
         mblossvals = []
+
+        thold = get_flat()
 
         if states is None: # nonrecurrent version
             # Index of each element of batch_size
@@ -187,6 +196,14 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
         # Feedforward --> get losses --> update
         lossvals = np.mean(mblossvals, axis=0)
+
+        kl_stop = False
+        if lossvals[-2] > 1.5 * target_kl:
+            logger.log(env.envs[0].leg_name + f': KL {lossvals[-2]} violates constraint {1.5 * target_kl}, resetting parameters ...')
+            set_from_flat(thold)
+            logger.log('done setting parameters')
+            kl_stop = True
+
         # End timer
         tnow = time.perf_counter()
         # Calculate the fps (frame per second)
@@ -198,24 +215,27 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if update % log_interval == 0 or update == 1:
             # Calculates if value function is a good predicator of the returns (ev > 1)
             # or if it's just worse than predicting nothing (ev =< 0)
-            mutex.acquire()
-            ev = explained_variance(values, returns)
-            logger.logkv(env.envs[0].leg_name + "/misc/serial_timesteps", update*nsteps)
-            logger.logkv(env.envs[0].leg_name + "/misc/nupdates", update)
-            logger.logkv(env.envs[0].leg_name + "/misc/total_timesteps", update*nbatch)
-            logger.logkv(env.envs[0].leg_name + "/fps", fps)
-            logger.logkv(env.envs[0].leg_name + "/misc/explained_variance", float(ev))
-            logger.logkv(env.envs[0].leg_name + '/eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
-            logger.logkv(env.envs[0].leg_name + '/eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
-            if eval_env is not None:
-                logger.logkv(env.envs[0].leg_name + '/eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
-                logger.logkv(env.envs[0].leg_name + '/eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
-            logger.logkv(env.envs[0].leg_name + '/misc/time_elapsed', tnow - tfirststart)
-            for (lossval, lossname) in zip(lossvals, model.loss_names):
-                logger.logkv(env.envs[0].leg_name + '/loss/' + lossname, lossval)
+            if env.envs[0].leg_name is 'main':
+                mutex.acquire()
+                ev = explained_variance(values, returns)
+                logger.logkv('main' + "/misc/serial_timesteps", update*nsteps)
+                logger.logkv('main' + "/misc/nupdates", update)
+                logger.logkv('main' + "/misc/total_timesteps", update*nbatch)
+                logger.logkv('main' + "/fps", fps)
+                logger.logkv('main' + "/misc/explained_variance", float(ev))
+                logger.logkv('main' + '/eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
+                logger.logkv('main' + '/epreward', epinfobuf[-1]['r'])
+                logger.logkv('main' + '/eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
+                if eval_env is not None:
+                    logger.logkv('main' + '/eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
+                    logger.logkv('main' + '/eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
+                logger.logkv('main' + '/misc/time_elapsed', tnow - tfirststart)
+                logger.logkv('main' + "/kl_stop", int(kl_stop))
+                for (lossval, lossname) in zip(lossvals, model.loss_names):
+                    logger.logkv('main' + '/loss/' + lossname, lossval)
 
-            logger.dumpkvs()
-            mutex.release()
+                logger.dumpkvs()
+                mutex.release()
         if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir() and is_mpi_root:
             checkdir = osp.join(logger.get_dir(), env.envs[0].leg_name + '/checkpoints', )
             os.makedirs(checkdir, exist_ok=True)
