@@ -198,7 +198,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         lossvals = np.mean(mblossvals, axis=0)
 
         kl_stop = False
-        if lossvals[-2] > 1.5 * target_kl:
+        if lossvals[-2] > 1.5 * target_kl and target_kl > 0.0:
             logger.log(env.envs[0].leg_name + f': KL {lossvals[-2]} violates constraint {1.5 * target_kl}, resetting parameters ...')
             set_from_flat(thold)
             logger.log('done setting parameters')
