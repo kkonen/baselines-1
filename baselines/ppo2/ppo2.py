@@ -215,7 +215,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if update % log_interval == 0 or update == 1:
             # Calculates if value function is a good predicator of the returns (ev > 1)
             # or if it's just worse than predicting nothing (ev =< 0)
-            if env.envs[0].leg_name is 'main':
+            if env.envs[0].leg_name is 'main' or env.envs[0].leg_name is 'lf':
                 mutex.acquire()
                 ev = explained_variance(values, returns)
                 logger.logkv('main' + "/misc/serial_timesteps", update*nsteps)
