@@ -54,6 +54,7 @@ def mara_mlp():
         # transfer_path = '/tmp/ros2learn/MARA-v0/ppo2_mlp/2019-02-19_12h47min/checkpoints/best',
         trained_path = '/tmp/ros2learn/MARA-v0/ppo2_mlp/2019-04-02_13h18min/checkpoints/best'
     )
+
 def phantomx_mlp():
     return dict(
         num_layers = 2,
@@ -70,42 +71,12 @@ def phantomx_mlp():
         cliprange = 0.2,
         vf_coef = 0.5,
         max_grad_norm = 0.5,
-        seed = None,
+        seed = 13,
         value_network = 'copy',
         network = 'mlp',
         total_timesteps = 1e8,
         save_interval = 10,
-        env_name = 'PhantomX-v0',
-        #env_name = 'MARAReal-v0',
-        #env_name = 'MARAOrient-v0',
-        # env_name = 'MARACollision-v0',
-        # env_name = 'MARACollisionOrient-v0',
-        transfer_path = None,
-        # transfer_path = '/tmp/ros2learn/MARA-v0/ppo2_mlp/2019-02-19_12h47min/checkpoints/best',
-        trained_path = '/tmp/ros2learn/PhantomX-v0/ppo2_mlp/2019-04-02_13h18min/checkpoints/best'
-    )
-
-def phantomx_mlp_2():
-    return dict(
-        num_layers = 2,
-        num_hidden = 64,
-        layer_norm = False,
-        nsteps = 2048,
-        nminibatches = 32, #batchsize = nevn * nsteps // nminibatches
-        lam = 0.95,
-        gamma = 0.99,
-        noptepochs = 10,
-        log_interval = 1,
-        ent_coef = 0.0,
-        lr = 0.0001,
-        cliprange = 0.2,
-        vf_coef = 0.5,
-        max_grad_norm = 0.5,
-        seed = None,
-        value_network = 'copy',
-        network = 'mlp',
-        total_timesteps = 1e8,
-        save_interval = 10,
+        target_kl = -1
         env_name = 'PhantomX-v0',
         #env_name = 'MARAReal-v0',
         #env_name = 'MARAOrient-v0',
