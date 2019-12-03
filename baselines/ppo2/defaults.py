@@ -76,7 +76,7 @@ def phantomx_mlp():
         network = 'mlp',
         total_timesteps = 1e8,
         save_interval = 10,
-        target_kl = -1
+        target_kl = -1,
         env_name = 'PhantomX-v0',
         #env_name = 'MARAReal-v0',
         #env_name = 'MARAOrient-v0',
