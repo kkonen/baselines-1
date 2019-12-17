@@ -60,7 +60,7 @@ def phantomx_mlp():
         num_layers = 2,
         num_hidden = 64,
         layer_norm = False,
-        nsteps = 2048,
+        nsteps = 1024,
         nminibatches = 32, #batchsize = nevn * nsteps // nminibatches
         lam = 0.95,
         gamma = 0.99,
